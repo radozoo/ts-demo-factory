@@ -15,7 +15,7 @@ Phase 1 is Retail/FMCG schema (hard-coded, no LLM).
 config/settings.py               ← all env vars, loaded once via Settings.from_env()
 ts_client/auth.py                ← ThoughtSpotAuth: Bearer token with caching + auto re-auth
 ts_client/tml_api.py             ← TMLClient: import_tml(), export_tml(), delete_by_name()
-schema/retail/tables.py          ← TableDef + ColumnDef dataclasses (4 tables)
+schema/retail/tables.py          ← TableDef + ColumnDef dataclasses (4 tables) — retail fallback
 schema/retail/data_gen.py        ← Faker generators driven by ColumnDef
 tml_builder/table_builder.py     ← TableDef → thoughtspot_tml.Table → YAML
 tml_builder/model_builder.py     ← Jinja2 template → thoughtspot_tml.Model → YAML
@@ -23,7 +23,10 @@ tml_builder/liveboard_builder.py ← Jinja2 template → thoughtspot_tml.Liveboa
 snowflake_client/loader.py       ← DDL from TableDef, bulk INSERT (RSA key pair auth)
 pipeline/orchestrator.py         ← runs steps in order, threads GUIDs between steps
 scripts/step1_ts_api_test.py     ← smoke test (Gate 1)
-scripts/run_demo.py              ← final entry point
+scripts/run_demo.py              ← entry point — runs intake() then pipeline
+scripts/intake.py                ← CLI questionnaire (questionary) → config dict
+scripts/generate_schema.py       ← calls Claude API → JSON star schema
+scripts/schema_to_pipeline.py    ← JSON schema → TableDef list + join specs
 ```
 
 ---
@@ -80,13 +83,19 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# fill in .env
+# fill in .env — including ANTHROPIC_API_KEY
 
 # Step 1 smoke test
 python -m scripts.step1_ts_api_test
 
-# Full pipeline
-python -m scripts.run_demo --customer "Acme Corp" --industry retail --focus EMEA
+# Test schema generation only (no pipeline)
+python -m scripts.generate_schema
+
+# Test JSON → TableDef translation only (no pipeline)
+python -m scripts.schema_to_pipeline
+
+# Full pipeline (interactive CLI intake + LLM schema + Snowflake + TS)
+python -m scripts.run_demo
 ```
 
 ---
@@ -95,6 +104,7 @@ python -m scripts.run_demo --customer "Acme Corp" --industry retail --focus EMEA
 
 | Variable | Description |
 |----------|-------------|
+| `ANTHROPIC_API_KEY` | Anthropic API key for schema generation |
 | `TS_HOST` | e.g. `https://myorg.thoughtspot.cloud` |
 | `TS_USERNAME` | ThoughtSpot login email |
 | `TS_PASSWORD` | ThoughtSpot password |
@@ -118,15 +128,51 @@ python -m scripts.run_demo --customer "Acme Corp" --industry retail --focus EMEA
 
 ---
 
-## Status (updated 2026-03-09)
+## Status (updated 2026-03-10)
 
 ### Phase 1 — COMPLETE ✓
-Full pipeline works end-to-end:
+Full pipeline works end-to-end (retail schema, hardcoded):
 1. Creates 4 Snowflake tables + loads 10K rows each (40K total)
 2. Imports Table TMLs → gets table GUIDs
 3. Cleans up old Model + Liveboard by name
 4. Imports Model TML → gets model GUID
 5. Imports Liveboard TML → renders charts correctly
+
+### Phase 2 — IN PROGRESS 🔄
+LLM-driven schema generation layer — tested, not yet wired into pipeline:
+
+| Component | File | Status |
+|-----------|------|--------|
+| CLI intake questionnaire | `scripts/intake.py` | ✓ done |
+| Claude API schema gen | `scripts/generate_schema.py` | ✓ done, tested |
+| JSON → TableDef translation | `scripts/schema_to_pipeline.py` | ✓ done, tested |
+| `run_demo.py` uses intake | `scripts/run_demo.py` | ✓ done |
+| Pipeline accepts dynamic tables | `pipeline/orchestrator.py` | ✗ **next step** |
+| Dynamic Model TML template | `tml_builder/model_builder.py` | ✗ next step |
+| Dynamic Liveboard TML template | `tml_builder/liveboard_builder.py` | ✗ next step |
+
+### Next session — what to do
+**Goal:** wire `schema_to_pipeline.py` output into `pipeline/orchestrator.py`
+
+1. **`pipeline/orchestrator.py`** — add `table_defs` + `joins` parameters
+   - If `table_defs` provided → use them instead of `ALL_TABLES` from retail
+   - Steps A (Snowflake) and B (Table TML import) work on `TableDef` objects already → should be straightforward
+   - Step C/D (Model + Liveboard) need dynamic Jinja2 templates (see below)
+
+2. **`tml_builder/model_builder.py`** + `templates/model.tml.j2`
+   - Current template is hardcoded retail joins (SALES_FACT ↔ DIM_STORE etc.)
+   - Need a generic template that loops over `joins` list from `json_to_joins()`
+   - Join format from `schema_to_pipeline.py`: `{"fact", "dim", "fact_col", "dim_col"}`
+   - Model columns: include all MEASUREs from fact + key ATTRIBUTEs from dims
+
+3. **`tml_builder/liveboard_builder.py`** + `templates/liveboard.tml.j2`
+   - Need to auto-generate chart tiles from schema MEASUREs and ATTRIBUTE dims
+   - Minimum viable: 1 BAR chart per dimension × top MEASURE
+   - Remember: `chart_columns` + `axis_configs` are REQUIRED or TS crashes
+
+4. **`scripts/run_demo.py`**
+   - Call `generate_schema()` after intake
+   - Pass `table_defs` + `joins` from `schema_to_pipeline.py` into `run_pipeline()`
 
 ### Environment (dev)
 - TS instance: `https://techpartners.thoughtspot.cloud`
@@ -134,6 +180,14 @@ Full pipeline works end-to-end:
 - TS connection ID: `76372876-5a62-4016-b4fa-84499feb6be5` (Revolt Snowflake Playground)
 - TS connection SF role: `_R_DEVELOPER` | warehouse: `HACKATHON_WH`
 - `venv/` exists and is fully installed
+- Anthropic API key: in `.env` as `ANTHROPIC_API_KEY`
+
+### Claude API notes
+- Model used: `claude-sonnet-4-20250514`
+- `output_config` JSON schema NOT supported on this model — use system prompt approach
+- Claude returns relationships in inconsistent formats across calls (3 formats seen):
+  `fact_table/fact_column`, `from_table/from_column`, `from/on` — all handled in `json_to_joins()`
+- `max_tokens=4096` needed to avoid truncation of larger schemas
 
 ---
 
@@ -227,7 +281,5 @@ table:
 
 ---
 
-## Phase 2 — next steps
-- Parameterize industry (currently hard-coded to retail)
-- Add LLM-driven schema/query generation
-- Support multiple industries (fintech, healthcare, etc.)
+## Phase 2 — remaining work
+See "Next session" in Status section above.
