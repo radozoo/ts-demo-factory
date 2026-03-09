@@ -1,6 +1,10 @@
 """Snowflake DDL creation and bulk data loading from TableDef."""
 from __future__ import annotations
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.serialization import (
+    load_pem_private_key, Encoding, PrivateFormat, NoEncryption,
+)
 import snowflake.connector
 from config.settings import Settings
 from schema.retail.tables import TableDef
@@ -11,11 +15,22 @@ _SF_TYPE_MAP = {
 }
 
 
+def _load_private_key(path: str):
+    with open(path, "rb") as f:
+        return load_pem_private_key(f.read(), password=None, backend=default_backend())
+
+
 def _get_connection(settings: Settings):
+    private_key = _load_private_key(settings.sf_private_key_path)
+    private_key_der = private_key.private_bytes(
+        encoding=Encoding.DER,
+        format=PrivateFormat.PKCS8,
+        encryption_algorithm=NoEncryption(),
+    )
     return snowflake.connector.connect(
         account=settings.sf_account,
         user=settings.sf_user,
-        password=settings.sf_password,
+        private_key=private_key_der,
         database=settings.sf_database,
         schema=settings.sf_schema,
         warehouse=settings.sf_warehouse,

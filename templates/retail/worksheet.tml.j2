@@ -40,19 +40,22 @@ worksheet:
       destination: DIM_STORE_1
       type: LEFT_OUTER
       is_one_to_one: false
-      on: "[SALES_FACT_1::STORE_ID] = [DIM_STORE_1::STORE_ID]"
+      "on":
+        - "[SALES_FACT_1::STORE_ID] = [DIM_STORE_1::STORE_ID]"
     - name: SALES_FACT_to_DIM_PRODUCT
       source: SALES_FACT_1
       destination: DIM_PRODUCT_1
       type: LEFT_OUTER
       is_one_to_one: false
-      on: "[SALES_FACT_1::PRODUCT_ID] = [DIM_PRODUCT_1::PRODUCT_ID]"
+      "on":
+        - "[SALES_FACT_1::PRODUCT_ID] = [DIM_PRODUCT_1::PRODUCT_ID]"
     - name: SALES_FACT_to_DIM_CUSTOMER
       source: SALES_FACT_1
       destination: DIM_CUSTOMER_1
       type: LEFT_OUTER
       is_one_to_one: false
-      on: "[SALES_FACT_1::CUSTOMER_ID] = [DIM_CUSTOMER_1::CUSTOMER_ID]"
+      "on":
+        - "[SALES_FACT_1::CUSTOMER_ID] = [DIM_CUSTOMER_1::CUSTOMER_ID]"
   worksheet_columns:
     - name: Sale ID
       column_id: SALES_FACT_1::SALE_ID
@@ -77,7 +80,7 @@ worksheet:
       column_id: SALES_FACT_1::DISCOUNT
       properties:
         column_type: MEASURE
-        aggregation: AVG
+        aggregation: AVERAGE
     - name: Quantity
       column_id: SALES_FACT_1::QUANTITY
       properties:
@@ -124,7 +127,7 @@ worksheet:
       column_id: DIM_PRODUCT_1::UNIT_PRICE
       properties:
         column_type: MEASURE
-        aggregation: AVG
+        aggregation: AVERAGE
     - name: Customer Name
       column_id: DIM_CUSTOMER_1::CUSTOMER_NAME
       properties:

@@ -42,6 +42,25 @@ class TMLClient:
         data = self._post("/api/rest/2.0/metadata/tml/import", payload)
         return data  # list of response dicts
 
+    def delete_by_name(self, names: list[str], metadata_type: str) -> None:
+        """
+        Delete all TS objects matching *names* and *metadata_type*.
+        Silently skips if none found.
+        """
+        data = self._post("/api/rest/2.0/metadata/search", {
+            "metadata": [{"type": metadata_type}],
+            "record_size": 200,
+        })
+        guids = [
+            item["metadata_header"]["id"]
+            for item in data
+            if item.get("metadata_header", {}).get("name") in names
+        ]
+        if guids:
+            url = f"{self._settings.ts_host}/api/rest/2.0/metadata/delete"
+            headers = {"Authorization": f"Bearer {self._auth.get_token()}"}
+            requests.post(url, json={"metadata": [{"identifier": g} for g in guids]}, headers=headers, timeout=60)
+
     def export_tml(self, guids: list[str], export_associated: bool = False) -> list[str]:
         """
         Export TML strings for the given GUIDs.

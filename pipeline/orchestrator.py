@@ -14,7 +14,7 @@ from schema.retail.tables import ALL_TABLES
 from schema.retail.data_gen import generate_rows
 from snowflake_client.loader import create_table, bulk_insert
 from tml_builder.table_builder import build_table_tml
-from tml_builder.worksheet_builder import build_worksheet_tml
+from tml_builder.model_builder import build_model_tml
 from tml_builder.liveboard_builder import build_liveboard_tml
 
 
@@ -51,29 +51,34 @@ def run_pipeline(
     print("[Pipeline] Importing Table TMLs…")
     table_guids: dict[str, str] = {}
     for table_def in ALL_TABLES:
-        tml = build_table_tml(table_def, settings.ts_connection_name)
+        tml = build_table_tml(table_def, settings.ts_connection_name, settings.sf_database, settings.sf_schema)
         results = client.import_tml([tml], policy="PARTIAL", create_new=True)
         guid = results[0].get("response", {}).get("header", {}).get("id_guid")
         table_guids[table_def.name] = guid
         print(f"  ✓ {table_def.name} → {guid}")
 
-    # ── Step C: Import Worksheet ───────────────────────────────────
-    print("[Pipeline] Importing Worksheet TML…")
-    ws_name = f"{safe_name}_Retail_Analytics"
-    ws_tml = build_worksheet_tml(
-        "retail/worksheet.tml.j2",
-        {"worksheet_name": ws_name, "table_guids": table_guids},
+    # ── Step C: Cleanup + Import Model ────────────────────────────
+    model_name = f"{safe_name}_Retail_Analytics"
+    lb_name = f"{safe_name}_Retail_Dashboard"
+    print("[Pipeline] Cleaning up existing TS objects…")
+    client.delete_by_name([lb_name], "LIVEBOARD")
+    client.delete_by_name([model_name], "LOGICAL_TABLE")
+    print("  ✓ Cleanup done")
+
+    print("[Pipeline] Importing Model TML…")
+    model_tml = build_model_tml(
+        "retail/model.tml.j2",
+        {"model_name": model_name, "table_guids": table_guids},
     )
-    ws_results = client.import_tml([ws_tml], policy="PARTIAL", create_new=True)
-    ws_guid = ws_results[0].get("response", {}).get("header", {}).get("id_guid")
-    print(f"  ✓ Worksheet → {ws_guid}")
+    model_results = client.import_tml([model_tml], policy="PARTIAL", create_new=True)
+    model_guid = model_results[0].get("response", {}).get("header", {}).get("id_guid")
+    print(f"  ✓ Model → {model_guid}")
 
     # ── Step D: Import Liveboard ───────────────────────────────────
     print("[Pipeline] Importing Liveboard TML…")
-    lb_name = f"{safe_name}_Retail_Dashboard"
     lb_tml = build_liveboard_tml(
         "retail/liveboard.tml.j2",
-        {"liveboard_name": lb_name, "worksheet_name": ws_name, "worksheet_guid": ws_guid},
+        {"liveboard_name": lb_name, "model_name": model_name, "model_guid": model_guid},
     )
     lb_results = client.import_tml([lb_tml], policy="PARTIAL", create_new=True)
     lb_guid = lb_results[0].get("response", {}).get("header", {}).get("id_guid")
@@ -81,6 +86,6 @@ def run_pipeline(
 
     return {
         "table_guids": table_guids,
-        "worksheet_guid": ws_guid,
+        "model_guid": model_guid,
         "liveboard_guid": lb_guid,
     }

@@ -24,7 +24,7 @@ def main() -> None:
         row_count=args.rows,
     )
     print("\n[DONE] Pipeline complete.")
-    print(f"  Worksheet GUID : {result['worksheet_guid']}")
+    print(f"  Worksheet GUID : {result['model_guid']}")
     print(f"  Liveboard GUID : {result['liveboard_guid']}")
 
 

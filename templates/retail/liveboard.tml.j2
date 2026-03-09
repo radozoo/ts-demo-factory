@@ -5,111 +5,201 @@ liveboard:
     - id: viz_revenue_by_region
       answer:
         name: Revenue by Region
-        description: Total revenue broken down by store region
         tables:
-          - id: {{ worksheet_guid }}
-            name: {{ worksheet_name }}
+          - id: {{ model_name }}
+            name: {{ model_name }}
+            fqn: {{ model_guid }}
         search_query: "[Revenue] [Region]"
         answer_columns:
           - name: Region
-          - name: Revenue
+          - name: Total Revenue
+        table:
+          table_columns:
+            - column_id: Region
+              headline_aggregation: COUNT_DISTINCT
+            - column_id: Total Revenue
+              headline_aggregation: SUM
+          ordered_column_ids:
+            - Region
+            - Total Revenue
+          client_state: ""
         chart:
           type: BAR
           chart_columns:
             - column_id: Region
-              series_columns: []
-            - column_id: Revenue
-              series_columns: []
+            - column_id: Total Revenue
+          axis_configs:
+            - x:
+                - Region
+              y:
+                - Total Revenue
+          client_state: ""
+        display_mode: CHART_MODE
     - id: viz_revenue_trend
       answer:
         name: Revenue Trend
-        description: Monthly revenue over time
         tables:
-          - id: {{ worksheet_guid }}
-            name: {{ worksheet_name }}
+          - id: {{ model_name }}
+            name: {{ model_name }}
+            fqn: {{ model_guid }}
         search_query: "[Revenue] [Date].monthly"
         answer_columns:
-          - name: Date
-          - name: Revenue
+          - name: "Month(Date)"
+          - name: Total Revenue
+        table:
+          table_columns:
+            - column_id: "Month(Date)"
+              headline_aggregation: MIN-MAX
+            - column_id: Total Revenue
+              headline_aggregation: SUM
+          ordered_column_ids:
+            - "Month(Date)"
+            - Total Revenue
+          client_state: ""
         chart:
           type: LINE
           chart_columns:
-            - column_id: Date
-              series_columns: []
-            - column_id: Revenue
-              series_columns: []
+            - column_id: "Month(Date)"
+            - column_id: Total Revenue
+          axis_configs:
+            - x:
+                - "Month(Date)"
+              y:
+                - Total Revenue
+          client_state: ""
+        display_mode: CHART_MODE
     - id: viz_top_categories
       answer:
         name: Top Categories by Revenue
-        description: Revenue breakdown by product category
         tables:
-          - id: {{ worksheet_guid }}
-            name: {{ worksheet_name }}
+          - id: {{ model_name }}
+            name: {{ model_name }}
+            fqn: {{ model_guid }}
         search_query: "[Revenue] [Category] top 8"
         answer_columns:
           - name: Category
-          - name: Revenue
+          - name: Total Revenue
+        table:
+          table_columns:
+            - column_id: Category
+              headline_aggregation: COUNT_DISTINCT
+            - column_id: Total Revenue
+              headline_aggregation: SUM
+          ordered_column_ids:
+            - Category
+            - Total Revenue
+          client_state: ""
         chart:
           type: PIE
           chart_columns:
             - column_id: Category
-              series_columns: []
-            - column_id: Revenue
-              series_columns: []
+            - column_id: Total Revenue
+          axis_configs:
+            - x:
+                - Category
+              y:
+                - Total Revenue
+          client_state: ""
+        display_mode: CHART_MODE
     - id: viz_loyalty_revenue
       answer:
         name: Revenue by Loyalty Tier
-        description: Revenue contribution per customer loyalty tier
         tables:
-          - id: {{ worksheet_guid }}
-            name: {{ worksheet_name }}
+          - id: {{ model_name }}
+            name: {{ model_name }}
+            fqn: {{ model_guid }}
         search_query: "[Revenue] [Loyalty Tier]"
         answer_columns:
           - name: Loyalty Tier
-          - name: Revenue
+          - name: Total Revenue
+        table:
+          table_columns:
+            - column_id: Loyalty Tier
+              headline_aggregation: COUNT_DISTINCT
+            - column_id: Total Revenue
+              headline_aggregation: SUM
+          ordered_column_ids:
+            - Loyalty Tier
+            - Total Revenue
+          client_state: ""
         chart:
           type: BAR
           chart_columns:
             - column_id: Loyalty Tier
-              series_columns: []
-            - column_id: Revenue
-              series_columns: []
+            - column_id: Total Revenue
+          axis_configs:
+            - x:
+                - Loyalty Tier
+              y:
+                - Total Revenue
+          client_state: ""
+        display_mode: CHART_MODE
     - id: viz_quantity_by_brand
       answer:
         name: Top Brands by Quantity Sold
-        description: Units sold per brand, top 10
         tables:
-          - id: {{ worksheet_guid }}
-            name: {{ worksheet_name }}
+          - id: {{ model_name }}
+            name: {{ model_name }}
+            fqn: {{ model_guid }}
         search_query: "[Quantity] [Brand] top 10"
         answer_columns:
           - name: Brand
-          - name: Quantity
+          - name: Total Quantity
+        table:
+          table_columns:
+            - column_id: Brand
+              headline_aggregation: COUNT_DISTINCT
+            - column_id: Total Quantity
+              headline_aggregation: SUM
+          ordered_column_ids:
+            - Brand
+            - Total Quantity
+          client_state: ""
         chart:
           type: COLUMN
           chart_columns:
             - column_id: Brand
-              series_columns: []
-            - column_id: Quantity
-              series_columns: []
+            - column_id: Total Quantity
+          axis_configs:
+            - x:
+                - Brand
+              y:
+                - Total Quantity
+          client_state: ""
+        display_mode: CHART_MODE
     - id: viz_avg_discount_by_category
       answer:
         name: Avg Discount by Category
-        description: Average discount percentage per product category
         tables:
-          - id: {{ worksheet_guid }}
-            name: {{ worksheet_name }}
+          - id: {{ model_name }}
+            name: {{ model_name }}
+            fqn: {{ model_guid }}
         search_query: "average [Discount] [Category]"
         answer_columns:
+          - name: Average Discount
           - name: Category
-          - name: Discount
+        table:
+          table_columns:
+            - column_id: Average Discount
+              headline_aggregation: SUM
+            - column_id: Category
+              headline_aggregation: COUNT_DISTINCT
+          ordered_column_ids:
+            - Average Discount
+            - Category
+          client_state: ""
         chart:
           type: BAR
           chart_columns:
+            - column_id: Average Discount
             - column_id: Category
-              series_columns: []
-            - column_id: Discount
-              series_columns: []
+          axis_configs:
+            - x:
+                - Category
+              y:
+                - Average Discount
+          client_state: ""
+        display_mode: CHART_MODE
   layout:
     tiles:
       - visualization_id: viz_revenue_by_region
