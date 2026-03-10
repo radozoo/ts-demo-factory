@@ -37,7 +37,7 @@ def generate_schema(customer: str, industry: str, description: str) -> dict:
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=4096,
+        max_tokens=8192,
         system=(
             "You are a data modelling expert specialising in analytical star schemas. "
             "Respond ONLY with a valid JSON object — no markdown, no explanation, no code block. "
@@ -47,6 +47,12 @@ def generate_schema(customer: str, industry: str, description: str) -> dict:
         ),
         messages=[{"role": "user", "content": prompt}],
     )
+
+    if response.stop_reason == "max_tokens":
+        raise RuntimeError(
+            "Schema generation hit max_tokens limit — response was truncated. "
+            "Increase max_tokens or simplify the schema request."
+        )
 
     raw = response.content[0].text.strip()
     # Strip markdown code block if model adds it anyway

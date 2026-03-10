@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 from pipeline.orchestrator import run_pipeline
-from scripts.intake import run_intake
+from scripts.intake_simple import run_intake
 from scripts.generate_schema import generate_schema
 from scripts.schema_to_pipeline import json_to_table_defs, json_to_joins, align_fk_ranges
 

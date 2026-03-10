@@ -143,6 +143,9 @@ def run_pipeline(
     table_defs: list[TableDef] | None = None,
     joins: list[dict] | None = None,
     skip_snowflake: bool = False,
+    charts: list[dict] | None = None,
+    years: int = 2,
+    patterns: list[str] | None = None,
 ) -> dict:
     """
     Full pipeline:
@@ -180,7 +183,7 @@ def run_pipeline(
         print(f"[Pipeline] Loading {row_count} rows into Snowflake for each table…")
         for tdef in active_tables:
             create_table(settings, tdef, drop_if_exists=True)
-            rows = generate_rows(tdef, row_count)
+            rows = generate_rows(tdef, row_count, years=years, patterns=patterns)
             bulk_insert(settings, tdef, rows)
             print(f"  ✓ {tdef.name} ({len(rows)} rows)")
 
@@ -249,7 +252,8 @@ def run_pipeline(
     # ── Step D: Import Liveboard ───────────────────────────────────
     print("[Pipeline] Importing Liveboard TML…")
     if dynamic:
-        charts = _build_charts(active_tables, joins, model_cols, fact_name)
+        if not charts:
+            charts = _build_charts(active_tables, joins, model_cols, fact_name)
         lb_tml = build_liveboard_tml(
             "dynamic/liveboard.tml.j2",
             {

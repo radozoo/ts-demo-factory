@@ -5,7 +5,7 @@ Automated creation of ThoughtSpot demo environments for customers.
 Input: customer name, industry, focus area.
 Output: dummy data in Snowflake + TML objects (Tables, Model, Liveboard) imported into ThoughtSpot via REST API v2.
 
-Phase 1 is Retail/FMCG schema (hard-coded, no LLM).
+Phase 1: hardcoded retail schema. Phase 2: LLM-driven dynamic schema. Phase 3: 6-step conversational AI intake.
 
 ---
 
@@ -23,10 +23,16 @@ tml_builder/liveboard_builder.py ← Jinja2 template → thoughtspot_tml.Liveboa
 snowflake_client/loader.py       ← DDL from TableDef, bulk INSERT (RSA key pair auth)
 pipeline/orchestrator.py         ← runs steps in order, threads GUIDs between steps
 scripts/step1_ts_api_test.py     ← smoke test (Gate 1)
-scripts/run_demo.py              ← entry point — runs intake() then pipeline
-scripts/intake.py                ← CLI questionnaire (questionary) → config dict
+scripts/run_demo.py              ← simple CLI intake + LLM schema + pipeline
+scripts/run_intake.py            ← AI-guided entry point (6-step conversational intake + pipeline)
+scripts/run_intake_only.py       ← runs only the AI intake phase, no Snowflake/TS
+scripts/intake_simple.py         ← original simple CLI questionnaire (used by run_demo.py)
 scripts/generate_schema.py       ← calls Claude API → JSON star schema
 scripts/schema_to_pipeline.py    ← JSON schema → TableDef list + join specs
+intake/intake_ai.py              ← IntakeEngine: 6-step conversational state machine
+intake/intake_prompts.py         ← SYSTEM_PROMPTS + EXTRACTION_PROMPTS dicts
+intake/skills/star_schema.md     ← injected into schema step system prompt
+intake/skills/ts_liveboard.md    ← injected into liveboard step system prompt
 ```
 
 ---
@@ -94,8 +100,18 @@ python -m scripts.generate_schema
 # Test JSON → TableDef translation only (no pipeline)
 python -m scripts.schema_to_pipeline
 
-# Full pipeline (interactive CLI intake + LLM schema + Snowflake + TS)
+# Test AI intake only (no Snowflake, no TS)
+python -m scripts.run_intake_only
+python -m scripts.run_intake_only --save   # saves intake_output.json
+
+# Full pipeline — simple CLI intake + LLM schema
 python -m scripts.run_demo
+python -m scripts.run_demo --skip-snowflake
+
+# Full pipeline — AI-guided 6-step conversational intake
+python -m scripts.run_intake
+python -m scripts.run_intake --skip-snowflake
+python -m scripts.run_intake --row-count 50000   # overrides intake volume selection
 ```
 
 ---
@@ -143,7 +159,7 @@ LLM-driven schema generation + dynamic pipeline fully wired and tested (Pet Cent
 
 | Component | File | Status |
 |-----------|------|--------|
-| CLI intake questionnaire | `scripts/intake.py` | ✓ done |
+| CLI intake questionnaire | `scripts/intake_simple.py` | ✓ done |
 | Claude API schema gen | `scripts/generate_schema.py` | ✓ done |
 | JSON → TableDef translation | `scripts/schema_to_pipeline.py` | ✓ done |
 | `run_demo.py` uses intake + LLM | `scripts/run_demo.py` | ✓ done |
@@ -152,34 +168,53 @@ LLM-driven schema generation + dynamic pipeline fully wired and tested (Pet Cent
 | Dynamic Liveboard TML template | `templates/dynamic/liveboard.tml.j2` | ✓ done |
 | Schema cache + --skip-snowflake | `scripts/run_demo.py` | ✓ done |
 
-### Next session — what to do
-1. **Spotter/Sage enable** — no REST API endpoint exists; must be done manually in TS UI:
+### Phase 3 — COMPLETE ✓
+Conversational AI intake (6-step flow) replacing the simple CLI questionnaire:
+
+| Component | File | Status |
+|-----------|------|--------|
+| IntakeEngine state machine | `intake/intake_ai.py` | ✓ done |
+| Step prompts + extraction | `intake/intake_prompts.py` | ✓ done |
+| Star schema skill | `intake/skills/star_schema.md` | ✓ done |
+| Liveboard skill | `intake/skills/ts_liveboard.md` | ✓ done |
+| AI entry point | `scripts/run_intake.py` | ✓ done |
+| Intake-only test script | `scripts/run_intake_only.py` | ✓ done |
+| Dataset config step (5/6) | `intake/intake_prompts.py` + `intake_ai.py` | ✓ done |
+| years + patterns in data_gen | `schema/retail/data_gen.py` | ✓ done |
+| years + patterns in orchestrator | `pipeline/orchestrator.py` | ✓ done |
+
+#### AI intake: 6-step flow
+```
+1. Customer context  — company name + web search (CZ/SK priority, then global)
+2. Analytics domain  — 4–6 domain options based on company context
+3. Use-case          — 3 concrete use-case proposals
+4. Schema design     — ASCII star schema, iterative confirmation
+5. Dataset config    — volume (10K/100K/1M), years history, patterns (seasonality, anomalies…)
+6. Liveboard design  — 3–5 chart proposals with resolved column names
+```
+
+#### Data patterns (implemented in data_gen.py)
+- `seasonality` — ×1.6 multiplier on measures for March–August rows
+- `anomalies`   — 2% of rows get ×5 measure spike
+- `regional_variance`, `promo_events`, `own_brand_growth` — stored/passed, not yet injected
+
+#### Sentinel phrases (step confirmation detection)
+```
+context:   "Let's move on"
+domain:    "Domain confirmed"
+usecase:   "Moving to schema design"
+schema:    "Schema confirmed"
+dataset:   "Dataset configured"
+liveboard: "Building your demo"
+```
+
+### Open items
+1. **Spotter/Sage enable** — no REST API endpoint; must be done manually in TS UI:
    - Data → Model → select model → More options → Enable Sage
-   - TML approach (`is_sage_enabled: true`) confirmed ignored by TS → inject removed from `model_builder.py`
-
 2. **New Snowflake table registration** — still manual (connection/update API broken):
-   - After each new customer run, register `{CUSTOMER}_*` tables in TS UI
+   - After each run, register `{CUSTOMER}_*` tables in TS UI
    - Data → Add data → Browse connection → select tables
-
-### Recently fixed (2026-03-10)
-**P1:**
-- Guard: pipeline aborts if any table GUID is None (was: silent broken TML)
-- Guard: pipeline aborts if model GUID is None (was: liveboard imported with fqn: None)
-- FK ID range alignment: `align_fk_ranges()` ensures fact FK max = dim PK max → JOIN matches
-- Unknown join format: warning + error if all relationships skipped (was: silent empty model)
-
-**P2:**
-- Claude model ID updated: `claude-sonnet-4-6` (was: `claude-sonnet-4-20250514`)
-- `delete_by_name` now logs warning on non-204/200 response (was: response ignored)
-- `ANTHROPIC_API_KEY` added to `Settings.required` + `.env.example` (was: validated only at API call time)
-- `.env.example`: removed unused `SF_PASSWORD`, added `SNOWFLAKE_PRIVATE_KEY_PATH` comment
-
-**P3 (cleanup):**
-- Deleted dead template `templates/retail/worksheet.tml.j2`
-- Removed empty `_SF_TYPE_MAP = {}` from `loader.py`
-- Removed unused `OUTPUT_SCHEMA` dict from `generate_schema.py`
-- Faker: `word` fallback replaced with `catch_phrase`; `["A","B","C","D"]` split into STATUS/TIER/SIZE/TYPE groups
-- Removed dead `is_sage_enabled` inject from `model_builder.py` (TS ignored it; user enables manually via UI)
+3. **Pattern injection** — `regional_variance`, `promo_events`, `own_brand_growth` not yet implemented in data_gen
 
 ### Environment (dev)
 - TS instance: `https://techpartners.thoughtspot.cloud`
