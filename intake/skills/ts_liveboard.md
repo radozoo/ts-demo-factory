@@ -30,6 +30,7 @@ AVERAGE measure: average [Discount Rate] [Category]
 ## Chart type selection
 | Type | Best for | Example |
 |---|---|---|
+| **KPI** | Single headline metric for the most important measures; typically compared to a target or prior period (e.g. vs last year, vs budget) | Total Overstock Value vs. Last Year |
 | **BAR** | Ranking categories horizontally | Revenue by Region |
 | **COLUMN** | Time-based categories (month/quarter on X) | Revenue by Quarter |
 | **LINE** | Continuous trends over time | Monthly Revenue Trend |

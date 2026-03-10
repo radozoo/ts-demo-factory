@@ -252,6 +252,18 @@ def run_pipeline(
     # ── Step D: Import Liveboard ───────────────────────────────────
     print("[Pipeline] Importing Liveboard TML…")
     if dynamic:
+        # Validate AI charts have required keys; fall back to auto-generated if not
+        KPI_REQUIRED = {"title", "search_query", "measure_resolved", "chart_type"}
+        CHART_REQUIRED = {"title", "search_query", "attr_resolved", "measure_resolved", "chart_type"}
+        if charts:
+            valid = all(
+                KPI_REQUIRED.issubset(c.keys()) if c.get("chart_type") == "KPI"
+                else CHART_REQUIRED.issubset(c.keys())
+                for c in charts
+            )
+            if not valid:
+                print("  ⚠ AI charts missing required keys — falling back to auto-generated charts")
+                charts = None
         if not charts:
             charts = _build_charts(active_tables, joins, model_cols, fact_name)
         lb_tml = build_liveboard_tml(
@@ -270,7 +282,12 @@ def run_pipeline(
         )
     lb_results = client.import_tml([lb_tml], policy="PARTIAL", create_new=True)
     lb_guid = lb_results[0].get("response", {}).get("header", {}).get("id_guid")
-    print(f"  ✓ Liveboard → {lb_guid}")
+    if lb_guid is None:
+        status_code = lb_results[0].get("response", {}).get("status", {}).get("status_code", "?")
+        error_msg = lb_results[0].get("response", {}).get("status", {}).get("error_message", "")
+        print(f"  ✗ Liveboard import failed (status={status_code}): {error_msg[:300]}")
+    else:
+        print(f"  ✓ Liveboard → {lb_guid}")
 
     return {
         "table_guids": table_guids,

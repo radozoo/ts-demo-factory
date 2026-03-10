@@ -359,7 +359,7 @@ class IntakeEngine:
         step = self.state["step"]
         base = SYSTEM_PROMPTS[step]
         if step in ("schema", "liveboard"):
-            skill_name = "star_schema.md" if step == "schema" else "ts_liveboard.md"
+            skill_name = "star_schema.md" if step == "schema" else "ts_visualizations.md"
             skill = self._load_skill(skill_name)
             if skill:
                 return f"{base}\n\n---\n\n{skill}"

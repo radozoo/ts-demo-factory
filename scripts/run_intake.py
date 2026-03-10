@@ -10,6 +10,8 @@ Usage:
     python -m scripts.run_intake --row-count 100000   # overrides intake selection
 """
 import argparse
+import json
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
@@ -17,6 +19,8 @@ load_dotenv(override=True)
 from intake.intake_ai import IntakeEngine
 from scripts.schema_to_pipeline import align_fk_ranges
 from pipeline.orchestrator import run_pipeline
+
+SCHEMA_CACHE = Path(__file__).parent.parent / "schema_cache.json"
 
 
 def main() -> None:
@@ -60,6 +64,21 @@ def main() -> None:
         years=years,
         patterns=patterns,
     )
+
+    # Save schema cache for --skip-snowflake reruns
+    schema = engine.state["schema"]
+    cache = {
+        "schema": schema,
+        "config": {
+            "customer_name": config["customer_name"],
+            "industry": config["industry"],
+            "use_case_title": config.get("use_case_title", ""),
+            "row_count": row_count,
+            "years": years,
+        },
+    }
+    SCHEMA_CACHE.write_text(json.dumps(cache, indent=2))
+    print(f"[Pipeline] Saved schema cache → {SCHEMA_CACHE.name}")
 
     print("\n[DONE] Pipeline complete.")
     print(f"  Model GUID     : {result['model_guid']}")

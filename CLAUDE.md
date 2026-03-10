@@ -32,7 +32,7 @@ scripts/schema_to_pipeline.py    ← JSON schema → TableDef list + join specs
 intake/intake_ai.py              ← IntakeEngine: 6-step conversational state machine
 intake/intake_prompts.py         ← SYSTEM_PROMPTS + EXTRACTION_PROMPTS dicts
 intake/skills/star_schema.md     ← injected into schema step system prompt
-intake/skills/ts_liveboard.md    ← injected into liveboard step system prompt
+intake/skills/ts_visualizations.md ← comprehensive viz reference, injected into liveboard step
 ```
 
 ---

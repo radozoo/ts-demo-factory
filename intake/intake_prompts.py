@@ -189,15 +189,20 @@ confirmed use-case:" — then immediately show the proposed layout. Do not wait 
 Instructions:
 1. Propose 3–5 charts based on the confirmed schema. For each, specify:
    - Title (human-readable)
-   - Chart type: BAR, COLUMN, LINE, PIE, or SCATTER
-   - X axis: which attribute column to group by (use display name: spaces not underscores)
-   - Y axis: which measure column to aggregate
+   - Chart type: BAR, COLUMN, LINE, PIE, SCATTER, or KPI
+   - For KPI: only Metric (a single measure, no X axis)
+   - For others: X axis (attribute column) and Y axis (measure column)
+   - Use display names (spaces not underscores)
 
-   Format:
-   **Chart 1: Revenue by Region**
+   Formats:
+   **Chart 1: Total Revenue**
+   Type: KPI  |  Metric: Revenue
+
+   **Chart 2: Revenue by Region**
    Type: BAR  |  X: Region  |  Y: Revenue
 
    Chart type guide:
+   - KPI: single headline number — great for top-of-dashboard summaries (total revenue, avg margin…)
    - BAR: compare categories (regions, brands, product categories)
    - COLUMN: time-based categories (month, quarter) — x-axis = time period
    - LINE: continuous trends over time — best when you have a DATE column
@@ -305,15 +310,21 @@ Respond ONLY with valid JSON, no markdown, no explanation:
   "charts": [
     {
       "title": "Human-readable chart title",
-      "chart_type": "BAR|LINE|PIE|COLUMN|SCATTER",
+      "chart_type": "BAR|LINE|PIE|COLUMN|SCATTER|KPI",
       "search_query": "see rules below",
-      "attr_col": "ATTR_COLUMN_NAME_UPPER_SNAKE_CASE",
+      "attr_col": "ATTR_COLUMN_NAME_UPPER_SNAKE_CASE (omit for KPI)",
       "measure_col": "MEASURE_COLUMN_NAME_UPPER_SNAKE_CASE",
-      "attr_resolved": "Attribute Display Name",
+      "attr_resolved": "Attribute Display Name (omit for KPI)",
       "measure_resolved": "Total Measure Display Name"
     }
   ]
 }
+
+Chart type rules:
+- KPI charts: set chart_type to "KPI". Omit attr_col and attr_resolved entirely (do NOT include them).
+  search_query for KPI: just "[{measure_display_name}]" (no attribute).
+  Example KPI: {"title": "Total Revenue", "chart_type": "KPI", "search_query": "[Revenue]", "measure_col": "REVENUE", "measure_resolved": "Total Revenue"}
+- All other chart types: include both attr_resolved and measure_resolved.
 
 Column name resolution rules (critical — ThoughtSpot resolves these at import time):
 - display_name = column name with underscores → spaces, title-cased

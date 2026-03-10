@@ -3,6 +3,37 @@ liveboard:
   description: "Auto-generated liveboard — ts-demo-factory"
   visualizations:
 {%- for chart in charts %}
+{%- if chart.chart_type == "KPI" %}
+    - id: viz_{{ loop.index }}
+      answer:
+        name: {{ chart.title }}
+        tables:
+          - id: {{ model_name }}
+            name: {{ model_name }}
+            fqn: {{ model_guid }}
+        search_query: "{{ chart.search_query }}"
+        answer_columns:
+          - name: {{ chart.measure_resolved }}
+        table:
+          table_columns:
+            - column_id: {{ chart.measure_resolved }}
+              show_headline: true
+              headline_aggregation: SUM
+          ordered_column_ids:
+            - {{ chart.measure_resolved }}
+          client_state: ""
+        chart:
+          type: COLUMN
+          chart_columns:
+            - column_id: {{ chart.measure_resolved }}
+          axis_configs:
+            - x: []
+              y:
+                - {{ chart.measure_resolved }}
+          client_state: ""
+        display_mode: TABLE_MODE
+      display_headline_column: {{ chart.measure_resolved }}
+{%- else %}
     - id: viz_{{ loop.index }}
       answer:
         name: {{ chart.title }}
@@ -36,13 +67,27 @@ liveboard:
                 - {{ chart.measure_resolved }}
           client_state: ""
         display_mode: CHART_MODE
+{%- endif %}
 {%- endfor %}
   layout:
     tiles:
 {%- for chart in charts %}
+{%- if chart.chart_type == "KPI" %}
       - visualization_id: viz_{{ loop.index }}
-        x: {{ (loop.index0 % 2) * 6 }}
-        y: {{ (loop.index0 // 2) * 4 }}
+        x: {{ (loop.index0 % 3) * 4 }}
+        y: 0
+        height: 2
+        width: 4
+{%- else %}
+{%- set non_kpi_index = [] %}
+{%- for c in charts[:loop.index] if c.chart_type != "KPI" %}
+{%- if non_kpi_index.append(1) %}{% endif %}
+{%- endfor %}
+{%- set ni = non_kpi_index | length - 1 %}
+      - visualization_id: viz_{{ loop.index }}
+        x: {{ (ni % 2) * 6 }}
+        y: {{ 2 + (ni // 2) * 4 }}
         height: 4
         width: 6
+{%- endif %}
 {%- endfor %}
