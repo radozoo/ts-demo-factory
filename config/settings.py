@@ -22,6 +22,8 @@ class Settings:
     sf_warehouse: str
     sf_role: str
 
+    anthropic_api_key: str
+
     @classmethod
     def from_env(cls) -> "Settings":
         missing = []
@@ -30,6 +32,7 @@ class Settings:
             "TS_CONNECTION_NAME",
             "SF_ACCOUNT", "SF_USER", "SNOWFLAKE_PRIVATE_KEY_PATH",
             "SF_DATABASE", "SF_SCHEMA", "SF_WAREHOUSE", "SF_ROLE",
+            "ANTHROPIC_API_KEY",
         ]
         for key in required:
             if not os.getenv(key):
@@ -50,4 +53,5 @@ class Settings:
             sf_schema=os.environ["SF_SCHEMA"],
             sf_warehouse=os.environ["SF_WAREHOUSE"],
             sf_role=os.environ["SF_ROLE"],
+            anthropic_api_key=os.environ["ANTHROPIC_API_KEY"],
         )

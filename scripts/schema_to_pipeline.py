@@ -18,7 +18,7 @@ _DB_TYPE: dict[str, str] = {
     "DOUBLE":  "NUMBER(18,2)",
     "VARCHAR": "VARCHAR(200)",
     "DATE":    "DATE",
-    "BOOLEAN": "BOOLEAN",
+    "BOOLEAN": "VARCHAR(5)",  # TS doesn't support BOOLEAN — store as 'true'/'false'
 }
 
 # ── Faker heuristics ──────────────────────────────────────────────────────────
@@ -30,17 +30,17 @@ def _faker_for(col_name: str, ts_data_type: str, column_type: str) -> tuple[str,
     """
     n = col_name.upper()
 
-    # --- BOOLEAN ---
-    if ts_data_type == "BOOLEAN":
-        return "pybool", {}
+    # --- BOOLEAN (stored as VARCHAR 'true'/'false') ---
+    if ts_data_type == "BOOLEAN" or n.startswith("IS_") or n.startswith("HAS_"):
+        return "random_element", {"elements": ["true", "false"]}
+
+    # --- Foreign-key / surrogate IDs (must be before DATE to avoid DATE_KEY mismatch) ---
+    if n.endswith("_ID") or n.endswith("_KEY") or n == "ID":
+        return "random_int", {"min": 1, "max": 1_000}
 
     # --- DATE ---
     if ts_data_type == "DATE" or n.endswith("_DATE") or n.startswith("DATE"):
         return "date_between", {"start_date": "-3y", "end_date": "today"}
-
-    # --- Foreign-key / surrogate IDs ---
-    if n.endswith("_ID") or n == "ID":
-        return "random_int", {"min": 1, "max": 999_999}
 
     # --- MEASUREs ---
     if column_type == "MEASURE":
@@ -76,8 +76,17 @@ def _faker_for(col_name: str, ts_data_type: str, column_type: str) -> tuple[str,
     if any(x in n for x in ("REGION",)):
         return "random_element", {"elements": ["North", "South", "East", "West", "Central"]}
 
-    if any(x in n for x in ("TYPE", "CATEGORY", "STATUS", "CLASS", "TIER", "SIZE", "LEVEL")):
-        return "random_element", {"elements": ["A", "B", "C", "D"]}
+    if any(x in n for x in ("STATUS",)):
+        return "random_element", {"elements": ["Active", "Inactive", "Pending", "Closed"]}
+
+    if any(x in n for x in ("TIER", "LEVEL", "CLASS")):
+        return "random_element", {"elements": ["Bronze", "Silver", "Gold", "Platinum"]}
+
+    if any(x in n for x in ("SIZE",)):
+        return "random_element", {"elements": ["Small", "Medium", "Large", "Extra Large"]}
+
+    if any(x in n for x in ("TYPE", "CATEGORY")):
+        return "random_element", {"elements": ["Standard", "Premium", "Basic", "Enterprise"]}
 
     if any(x in n for x in ("CURRENCY",)):
         return "currency_code", {}
@@ -89,7 +98,7 @@ def _faker_for(col_name: str, ts_data_type: str, column_type: str) -> tuple[str,
         return "random_int", {"min": 1, "max": 9_999}
 
     # VARCHAR fallback
-    return "word", {}
+    return "catch_phrase", {}
 
 
 # ── Main translation function ─────────────────────────────────────────────────
@@ -104,13 +113,21 @@ def json_to_table_defs(schema: dict) -> list[TableDef]:
     table_defs: list[TableDef] = []
 
     for tbl in schema["tables"]:
+        tbl_name = tbl.get("name") or tbl.get("table_name") or tbl.get("table", "")
+        if not tbl_name:
+            raise ValueError(f"Table entry has no name key. Keys: {list(tbl.keys())}")
+        tbl = {**tbl, "name": tbl_name}
         columns: list[ColumnDef] = []
         is_first = True
 
         for col in tbl["columns"]:
-            name        = col["name"]
-            ts_dtype    = col["data_type"]
-            col_type    = col["column_type"]
+            name     = col.get("name") or col.get("column_name") or col.get("col_name", "")
+            ts_dtype = col.get("data_type") or col.get("type", "VARCHAR")
+            if ts_dtype == "BOOLEAN":
+                ts_dtype = "VARCHAR"  # TS doesn't support BOOLEAN
+            col_type = col.get("column_type") or col.get("kind", "ATTRIBUTE")
+            if not name:
+                raise ValueError(f"Column in table '{tbl['name']}' missing name key. Keys: {list(col.keys())}")
             db_type     = _DB_TYPE.get(ts_dtype, "VARCHAR(200)")
             faker_m, faker_kw = _faker_for(name, ts_dtype, col_type)
 
@@ -128,9 +145,9 @@ def json_to_table_defs(schema: dict) -> list[TableDef]:
                 is_pk=is_pk,
             ))
 
-        tbl_type = tbl.get("type", "fact" if "FACT" in tbl["name"].upper() else "dimension")
+        tbl_type = tbl.get("type", "fact" if "FACT" in tbl_name.upper() else "dimension")
         table_defs.append(TableDef(
-            name=tbl["name"],
+            name=tbl_name,
             description=f"{tbl_type.capitalize()} table — auto-generated",
             columns=columns,
         ))
@@ -178,10 +195,51 @@ def json_to_joins(schema: dict) -> list[dict]:
                 "dim_col":  right_c,
             })
         else:
-            # Unknown format — skip gracefully
+            print(f"  ⚠ Unknown relationship format — skipping: {list(rel.keys())}")
             continue
+
+    if not joins and schema.get("relationships"):
+        raise RuntimeError(
+            f"[Schema] All {len(schema['relationships'])} relationships had unknown format — "
+            "no joins built. Check Claude API output."
+        )
     return joins
 
+
+
+
+# ── FK range alignment ─────────────────────────────────────────────────────────
+
+def align_fk_ranges(table_defs: list[TableDef], joins: list[dict]) -> None:
+    """
+    Ensure every fact FK column uses the same ID range as the corresponding dim PK column.
+
+    With random_int, both sides must use the same max so LEFT JOINs produce matches.
+    Mutates table_defs in-place (replaces ColumnDef in the columns list).
+    """
+    import dataclasses
+    td_map = {td.name: td for td in table_defs}
+
+    for join in joins:
+        fact_td = td_map.get(join["fact"])
+        dim_td = td_map.get(join["dim"])
+        if not fact_td or not dim_td:
+            continue
+
+        dim_pk_col = next(
+            (c for c in dim_td.columns if c.name == join["dim_col"] and c.faker_method == "random_int"),
+            None,
+        )
+        if dim_pk_col is None:
+            continue
+        dim_max = dim_pk_col.faker_kwargs.get("max", 1_000)
+
+        for i, col in enumerate(fact_td.columns):
+            if col.name == join["fact_col"] and col.faker_method == "random_int":
+                fact_td.columns[i] = dataclasses.replace(
+                    col, faker_kwargs={**col.faker_kwargs, "max": dim_max}
+                )
+                break
 
 # ── Standalone test ───────────────────────────────────────────────────────────
 

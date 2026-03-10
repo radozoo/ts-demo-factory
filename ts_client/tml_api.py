@@ -59,7 +59,10 @@ class TMLClient:
         if guids:
             url = f"{self._settings.ts_host}/api/rest/2.0/metadata/delete"
             headers = {"Authorization": f"Bearer {self._auth.get_token()}"}
-            requests.post(url, json={"metadata": [{"identifier": g} for g in guids]}, headers=headers, timeout=60)
+            resp = requests.post(url, json={"metadata": [{"identifier": g} for g in guids]}, headers=headers, timeout=60)
+            # 204 = success (empty body); anything else is unexpected
+            if resp.status_code not in (200, 204):
+                print(f"  ⚠ delete_by_name returned {resp.status_code}: {resp.text[:200]}")
 
     def export_tml(self, guids: list[str], export_associated: bool = False) -> list[str]:
         """

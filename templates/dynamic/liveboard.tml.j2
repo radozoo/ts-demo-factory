@@ -1,0 +1,48 @@
+liveboard:
+  name: {{ liveboard_name }}
+  description: "Auto-generated liveboard — ts-demo-factory"
+  visualizations:
+{%- for chart in charts %}
+    - id: viz_{{ loop.index }}
+      answer:
+        name: {{ chart.title }}
+        tables:
+          - id: {{ model_name }}
+            name: {{ model_name }}
+            fqn: {{ model_guid }}
+        search_query: "{{ chart.search_query }}"
+        answer_columns:
+          - name: {{ chart.attr_resolved }}
+          - name: {{ chart.measure_resolved }}
+        table:
+          table_columns:
+            - column_id: {{ chart.attr_resolved }}
+              headline_aggregation: COUNT_DISTINCT
+            - column_id: {{ chart.measure_resolved }}
+              headline_aggregation: SUM
+          ordered_column_ids:
+            - {{ chart.attr_resolved }}
+            - {{ chart.measure_resolved }}
+          client_state: ""
+        chart:
+          type: {{ chart.chart_type }}
+          chart_columns:
+            - column_id: {{ chart.attr_resolved }}
+            - column_id: {{ chart.measure_resolved }}
+          axis_configs:
+            - x:
+                - {{ chart.attr_resolved }}
+              y:
+                - {{ chart.measure_resolved }}
+          client_state: ""
+        display_mode: CHART_MODE
+{%- endfor %}
+  layout:
+    tiles:
+{%- for chart in charts %}
+      - visualization_id: viz_{{ loop.index }}
+        x: {{ (loop.index0 % 2) * 6 }}
+        y: {{ (loop.index0 // 2) * 4 }}
+        height: 4
+        width: 6
+{%- endfor %}

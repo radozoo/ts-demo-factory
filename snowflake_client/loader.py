@@ -10,11 +10,6 @@ from config.settings import Settings
 from schema.retail.tables import TableDef
 
 
-_SF_TYPE_MAP = {
-    # thoughtspot ts_data_type → not used here; we use col.db_type (Snowflake native)
-}
-
-
 def _load_private_key(path: str):
     with open(path, "rb") as f:
         return load_pem_private_key(f.read(), password=None, backend=default_backend())

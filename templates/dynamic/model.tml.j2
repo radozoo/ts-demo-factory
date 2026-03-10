@@ -1,0 +1,25 @@
+model:
+  name: {{ model_name }}
+  description: "Auto-generated analytics model — ts-demo-factory"
+  model_tables:
+    - name: {{ fact_name }}
+      fqn: {{ table_guids[fact_name] }}
+{%- for j in joins %}
+    - name: {{ j.dim }}
+      fqn: {{ table_guids[j.dim] }}
+      joins:
+        - "with": {{ j.fact }}
+          "on": "[{{ j.fact }}::{{ j.fact_col }}] = [{{ j.dim }}::{{ j.dim_col }}]"
+          type: LEFT_OUTER
+          cardinality: MANY_TO_ONE
+{%- endfor %}
+  columns:
+{%- for col in model_columns %}
+    - name: {{ col.name }}
+      column_id: {{ col.column_id }}
+      properties:
+        column_type: {{ col.column_type }}
+{%- if col.aggregation %}
+        aggregation: {{ col.aggregation }}
+{%- endif %}
+{%- endfor %}

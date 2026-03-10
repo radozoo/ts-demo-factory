@@ -138,41 +138,48 @@ Full pipeline works end-to-end (retail schema, hardcoded):
 4. Imports Model TML → gets model GUID
 5. Imports Liveboard TML → renders charts correctly
 
-### Phase 2 — IN PROGRESS 🔄
-LLM-driven schema generation layer — tested, not yet wired into pipeline:
+### Phase 2 — COMPLETE ✓
+LLM-driven schema generation + dynamic pipeline fully wired and tested (Pet Center demo):
 
 | Component | File | Status |
 |-----------|------|--------|
 | CLI intake questionnaire | `scripts/intake.py` | ✓ done |
-| Claude API schema gen | `scripts/generate_schema.py` | ✓ done, tested |
-| JSON → TableDef translation | `scripts/schema_to_pipeline.py` | ✓ done, tested |
-| `run_demo.py` uses intake | `scripts/run_demo.py` | ✓ done |
-| Pipeline accepts dynamic tables | `pipeline/orchestrator.py` | ✗ **next step** |
-| Dynamic Model TML template | `tml_builder/model_builder.py` | ✗ next step |
-| Dynamic Liveboard TML template | `tml_builder/liveboard_builder.py` | ✗ next step |
+| Claude API schema gen | `scripts/generate_schema.py` | ✓ done |
+| JSON → TableDef translation | `scripts/schema_to_pipeline.py` | ✓ done |
+| `run_demo.py` uses intake + LLM | `scripts/run_demo.py` | ✓ done |
+| Pipeline accepts dynamic tables | `pipeline/orchestrator.py` | ✓ done |
+| Dynamic Model TML template | `templates/dynamic/model.tml.j2` | ✓ done |
+| Dynamic Liveboard TML template | `templates/dynamic/liveboard.tml.j2` | ✓ done |
+| Schema cache + --skip-snowflake | `scripts/run_demo.py` | ✓ done |
 
 ### Next session — what to do
-**Goal:** wire `schema_to_pipeline.py` output into `pipeline/orchestrator.py`
+1. **Spotter/Sage enable** — no REST API endpoint exists; must be done manually in TS UI:
+   - Data → Model → select model → More options → Enable Sage
+   - TML approach (`is_sage_enabled: true`) confirmed ignored by TS → inject removed from `model_builder.py`
 
-1. **`pipeline/orchestrator.py`** — add `table_defs` + `joins` parameters
-   - If `table_defs` provided → use them instead of `ALL_TABLES` from retail
-   - Steps A (Snowflake) and B (Table TML import) work on `TableDef` objects already → should be straightforward
-   - Step C/D (Model + Liveboard) need dynamic Jinja2 templates (see below)
+2. **New Snowflake table registration** — still manual (connection/update API broken):
+   - After each new customer run, register `{CUSTOMER}_*` tables in TS UI
+   - Data → Add data → Browse connection → select tables
 
-2. **`tml_builder/model_builder.py`** + `templates/model.tml.j2`
-   - Current template is hardcoded retail joins (SALES_FACT ↔ DIM_STORE etc.)
-   - Need a generic template that loops over `joins` list from `json_to_joins()`
-   - Join format from `schema_to_pipeline.py`: `{"fact", "dim", "fact_col", "dim_col"}`
-   - Model columns: include all MEASUREs from fact + key ATTRIBUTEs from dims
+### Recently fixed (2026-03-10)
+**P1:**
+- Guard: pipeline aborts if any table GUID is None (was: silent broken TML)
+- Guard: pipeline aborts if model GUID is None (was: liveboard imported with fqn: None)
+- FK ID range alignment: `align_fk_ranges()` ensures fact FK max = dim PK max → JOIN matches
+- Unknown join format: warning + error if all relationships skipped (was: silent empty model)
 
-3. **`tml_builder/liveboard_builder.py`** + `templates/liveboard.tml.j2`
-   - Need to auto-generate chart tiles from schema MEASUREs and ATTRIBUTE dims
-   - Minimum viable: 1 BAR chart per dimension × top MEASURE
-   - Remember: `chart_columns` + `axis_configs` are REQUIRED or TS crashes
+**P2:**
+- Claude model ID updated: `claude-sonnet-4-6` (was: `claude-sonnet-4-20250514`)
+- `delete_by_name` now logs warning on non-204/200 response (was: response ignored)
+- `ANTHROPIC_API_KEY` added to `Settings.required` + `.env.example` (was: validated only at API call time)
+- `.env.example`: removed unused `SF_PASSWORD`, added `SNOWFLAKE_PRIVATE_KEY_PATH` comment
 
-4. **`scripts/run_demo.py`**
-   - Call `generate_schema()` after intake
-   - Pass `table_defs` + `joins` from `schema_to_pipeline.py` into `run_pipeline()`
+**P3 (cleanup):**
+- Deleted dead template `templates/retail/worksheet.tml.j2`
+- Removed empty `_SF_TYPE_MAP = {}` from `loader.py`
+- Removed unused `OUTPUT_SCHEMA` dict from `generate_schema.py`
+- Faker: `word` fallback replaced with `catch_phrase`; `["A","B","C","D"]` split into STATUS/TIER/SIZE/TYPE groups
+- Removed dead `is_sage_enabled` inject from `model_builder.py` (TS ignored it; user enables manually via UI)
 
 ### Environment (dev)
 - TS instance: `https://techpartners.thoughtspot.cloud`
@@ -183,7 +190,7 @@ LLM-driven schema generation layer — tested, not yet wired into pipeline:
 - Anthropic API key: in `.env` as `ANTHROPIC_API_KEY`
 
 ### Claude API notes
-- Model used: `claude-sonnet-4-20250514`
+- Model used: `claude-sonnet-4-6`
 - `output_config` JSON schema NOT supported on this model — use system prompt approach
 - Claude returns relationships in inconsistent formats across calls (3 formats seen):
   `fact_table/fact_column`, `from_table/from_column`, `from/on` — all handled in `json_to_joins()`
@@ -277,9 +284,26 @@ table:
 - `POST /api/rest/2.0/connection/update` → always 500 or silently does nothing
 - **Workaround:** after creating tables in Snowflake, register them in TS connection via
   **ThoughtSpot UI** (Data → Add data → Browse connection → select tables)
-- Tables registered: SALES_FACT, DIM_STORE, DIM_PRODUCT, DIM_CUSTOMER (all in `_REVOLT_ANALYTICS_DEV.RADO`)
+- Dynamic pipeline creates customer-prefixed tables: `PET_CENTER_INVENTORY_FACT` etc. — register those, not the bare names
 
----
+### BOOLEAN data type not supported in TS Table TML
+- TS rejects `data_type: BOOLEAN` on import with: `Data type BOOLEAN is not valid for column...`
+- **Fix:** `schema_to_pipeline.py` maps `BOOLEAN` → `VARCHAR` (stores `'true'`/`'false'` strings)
+- `_faker_for()` checks `IS_` / `HAS_` prefixes and returns `random_element(["true", "false"])`
 
-## Phase 2 — remaining work
-See "Next session" in Status section above.
+### Customer-prefixed table names (dynamic pipeline)
+- Dynamic pipeline prefixes all table names with `{SAFE_CUSTOMER_NAME}_` to avoid clashes between demos
+- e.g. Pet Center → `PET_CENTER_INVENTORY_FACT`, `PET_CENTER_PRODUCT_DIM` etc.
+- Implemented in `orchestrator.py` with `dataclasses.replace()` on TableDef + joins remapping
+- After Snowflake load, register the prefixed names in TS UI
+
+### Spotter/Sage enable — must be done manually in TS UI
+- No REST API v2 endpoint exists for enabling Spotter on a model
+- TML approach (`is_sage_enabled: true`) confirmed ignored by TS — inject removed from `model_builder.py`
+- **Manual steps:** Data → Model → select model → More options → Enable Sage
+
+### --skip-snowflake flag + schema_cache.json
+- Full run saves `schema_cache.json` with both `schema` and `config`
+- `--skip-snowflake` loads from cache (no intake questionnaire, no Snowflake)
+- Use after: (a) tables already loaded in Snowflake, (b) manually registered in TS UI
+- Cache file: `ts-demo-factory/schema_cache.json` (gitignored)

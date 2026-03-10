@@ -19,57 +19,6 @@ DESCRIPTION = (
     "zaujíma nás výkonnosť predaja podľa modelu, regiónu a typu dealera"
 )
 
-# ── Expected JSON structure ───────────────────────────────────────────────────
-OUTPUT_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "tables": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "type": {"type": "string", "enum": ["fact", "dimension"]},
-                    "columns": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": {"type": "string"},
-                                "data_type": {"type": "string"},
-                                "column_type": {
-                                    "type": "string",
-                                    "enum": ["ATTRIBUTE", "MEASURE"],
-                                },
-                            },
-                            "required": ["name", "data_type", "column_type"],
-                            "additionalProperties": False,
-                        },
-                    },
-                },
-                "required": ["name", "type", "columns"],
-                "additionalProperties": False,
-            },
-        },
-        "relationships": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "from": {"type": "string"},
-                    "to": {"type": "string"},
-                    "on": {"type": "string"},
-                },
-                "required": ["from", "to", "on"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    "required": ["tables", "relationships"],
-    "additionalProperties": False,
-}
-
-
 def generate_schema(customer: str, industry: str, description: str) -> dict:
     client = anthropic.Anthropic()
 
@@ -87,12 +36,14 @@ def generate_schema(customer: str, industry: str, description: str) -> dict:
     )
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=4096,
         system=(
             "You are a data modelling expert specialising in analytical star schemas. "
             "Respond ONLY with a valid JSON object — no markdown, no explanation, no code block. "
-            "The JSON must have exactly two keys: 'tables' (array) and 'relationships' (array)."
+            "The JSON must have exactly two keys: 'tables' (array) and 'relationships' (array). "
+            "Each relationship object must have exactly these four keys: "
+            "'fact_table', 'fact_column', 'dimension_table', 'dimension_column'."
         ),
         messages=[{"role": "user", "content": prompt}],
     )
